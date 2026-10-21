@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepResearch Agent · 多智能体深度研究系统</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b26; --panel2: #1c2333; --border: #2a3348;
+    --text: #e6e9f0; --muted: #8b94a7; --accent: #4f8cff; --ok: #34c98e;
+    --warn: #f0a33c; --err: #e5534b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 18px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  header h1 { font-size: 20px; letter-spacing: .5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 13px; }
+  .controls {
+    display: flex; gap: 10px; padding: 16px 28px;
+    border-bottom: 1px solid var(--border); align-items: center;
+  }
+  #topic {
+    flex: 1; max-width: 560px; padding: 10px 14px; font-size: 14px;
+    background: var(--panel2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; outline: none;
+  }
+  #topic:focus { border-color: var(--accent); }
+  #startBtn {
+    padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  }
+  #startBtn:disabled { background: #33405c; cursor: not-allowed; }
+  #statusPill {
+    font-size: 12px; padding: 5px 12px; border-radius: 999px;
+    background: var(--panel2); color: var(--muted); border: 1px solid var(--border);
+  }
+  #statusPill.running { color: var(--accent); border-color: var(--accent); }
+  #statusPill.done { color: var(--ok); border-color: var(--ok); }
+  #statusPill.error { color: var(--err); border-color: var(--err); }
+  #timer { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  main {
+    flex: 1; display: grid; grid-template-columns: 400px 1fr;
+    gap: 16px; padding: 16px 28px; min-height: 0;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .card h2 {
+    font-size: 13px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 12px;
+  }
+  .left { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  /* 流水线阶段卡片 */
+  .stage {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    border-radius: 10px; background: var(--panel2); margin-bottom: 8px;
+    border: 1px solid transparent; transition: border-color .3s;
+  }
+  .stage.active { border-color: var(--accent); }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #3a4560; flex-shrink: 0;
+  }
+  .stage.active .dot { background: var(--accent); animation: pulse 1.2s infinite; }
+  .stage.done .dot { background: var(--ok); animation: none; }
+  .stage.fail .dot { background: var(--err); animation: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .stage .name { font-size: 14px; font-weight: 600; }
+  .stage .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stage .meta { margin-left: auto; font-size: 12px; color: var(--muted); text-align: right; }
+  .stage .meta b { color: var(--text); }
+  .badge {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    margin-left: 8px; vertical-align: middle;
+  }
+  .badge.loop { background: rgba(240,163,60,.15); color: var(--warn); }
+  .badge.pass { background: rgba(52,201,142,.15); color: var(--ok); }
+  .badge.reject { background: rgba(229,83,75,.15); color: var(--err); }
+
+  /* 子问题与事件日志 */
+  #subQuestions { font-size: 13px; line-height: 1.7; color: var(--text); }
+  #subQuestions li { margin-left: 18px; }
+  #log {
+    flex: 1; overflow-y: auto; font-size: 12px; line-height: 1.8;
+    color: var(--muted); font-family: Consolas, monospace; min-height: 80px;
+  }
+  #log .t { color: #55608a; margin-right: 8px; }
+  #log .n { color: var(--accent); }
+
+  /* 报告区 */
+  #reportWrap { overflow-y: auto; min-height: 0; }
+  #report { font-size: 14.5px; line-height: 1.85; padding: 4px 8px 24px; }
+  #report h1, #report h2, #report h3, #report h4 { margin: 18px 0 10px; line-height: 1.4; }
+  #report h1 { font-size: 21px; } #report h2 { font-size: 18px; }
+  #report h3 { font-size: 16px; color: var(--accent); }
+  #report p, #report li { color: #cfd6e4; }
+  #report ul, #report ol { padding-left: 22px; margin: 8px 0; }
+  #report a { color: var(--accent); }
+  #report blockquote {
+    border-left: 3px solid var(--accent); padding: 6px 14px;
+    background: var(--panel2); border-radius: 0 8px 8px 0; color: var(--muted); margin: 10px 0;
+  }
+  #report code { background: var(--panel2); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  #report table { border-collapse: collapse; margin: 12px 0; width: 100%; }
+  #report th, #report td { border: 1px solid var(--border); padding: 7px 10px; font-size: 13px; }
+  #report th { background: var(--panel2); }
+  #placeholder { color: #4a5470; text-align: center; margin-top: 120px; font-size: 14px; line-height: 2; }
+  /* KaTeX 公式 */
+  #report .katex { font-size: 1.05em; }
+  #report .katex-display { overflow-x: auto; overflow-y: hidden; padding: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Deep<span>Research</span> Agent</h1>
+  <p>多智能体协作 · 规划 / 并行检索 / 质量评审回路 / 成稿审校</p>
+</header>
+
+<div class="controls">
+  <input id="topic" placeholder="输入研究话题，例如：RAG 技术在企业知识库中的应用">
+  <button id="startBtn">开始研究</button>
+  <span id="statusPill">空闲</span>
+  <span id="timer"></span>
+</div>
+
+<main>
+  <div class="left">
+    <div class="card">
+      <h2>Agent 流水线</h2>
+      <div class="stage" id="st-planner">
+        <div class="dot"></div>
+        <div><div class="name">Planner</div><div class="desc">拆解研究子问题</div></div>
+        <div class="meta" id="meta-planner"></div>
+      </div>
+      <div class="stage" id="st-researcher">
+        <div class="dot"></div>
+        <div><div class="name">Researcher × N</div><div class="desc">并行检索 · 提炼证据卡</div></div>
+        <div class="meta" id="meta-researcher"></div>
+      </div>
+      <div class="stage" id="st-critic">
+        <div class="dot"></div>
+        <div><div class="name">Critic</div><div class="desc">证据质量评审 · 反馈回路</div></div>
+        <div class="meta" id="meta-critic"></div>
+      </div>
+      <div class="stage" id="st-writer">
+        <div class="dot"></div>
+        <div><div class="name">Writer</div><div class="desc">综合证据撰写初稿</div></div>
+        <div class="meta" id="meta-writer"></div>
+      </div>
+      <div class="stage" id="st-editor">
+        <div class="dot"></div>
+        <div><div class="name">Editor</div><div class="desc">事实审校 · 输出终稿</div></div>
+        <div class="meta" id="meta-editor"></div>
+      </div>
+    </div>
+
+    <div class="card" id="sqCard" style="display:none">
+      <h2>子问题</h2>
+      <ol id="subQuestions"></ol>
+    </div>
+
+    <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:0">
+      <h2>执行日志</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <div class="card" id="reportWrap">
+    <h2>研究报告</h2>
+    <div id="placeholder">输入话题并点击「开始研究」<br>各 Agent 的协作过程将实时显示在左侧</div>
+    <div id="report"></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const stages = ["planner", "researcher", "critic", "writer", "editor"];
+let es = null, t0 = 0, timerInt = null, researcherDone = 0, totalHits = 0;
+
+function fmtTime(s) {
+  return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+function startTimer() {
+  t0 = Date.now();
+  timerInt = setInterval(() => {
+    $("timer").textContent = fmtTime(Math.floor((Date.now() - t0) / 1000));
+  }, 1000);
+}
+function stopTimer() { clearInterval(timerInt); }
+
+function setStatus(text, cls) {
+  const p = $("statusPill");
+  p.textContent = text;
+  p.className = cls || "";
+}
+function setStage(name, state) {
+  $("st-" + name).className = "stage" + (state ? " " + state : "");
+}
+function log(node, msg) {
+  const el = document.createElement("div");
+  const t = fmtTime(Math.floor((Date.now() - t0) / 1000));
+  el.innerHTML = `<span class="t">[${t}]</span><span class="n">${node}</span> ${msg}`;
+  $("log").appendChild(el);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function reset() {
+  stages.forEach(s => { setStage(s); $("meta-" + s).textContent = ""; });
+  $("log").innerHTML = ""; $("report").innerHTML = "";
+  $("placeholder").style.display = "block";
+  $("sqCard").style.display = "none"; $("subQuestions").innerHTML = "";
+  researcherDone = 0; totalHits = 0;
+}
+
+function handleEvent(d) {
+  if (d.type === "node") {
+    if (d.node === "planner") {
+      setStage("planner", "done"); setStage("researcher", "active");
+      $("meta-planner").innerHTML = `<b>${d.sub_questions.length}</b> 个子问题`;
+      if (d.loop > 0) $("meta-planner").innerHTML += ` <span class="badge loop">第 ${d.loop + 1} 轮</span>`;
+      $("subQuestions").innerHTML = d.sub_questions.map(q => `<li>${esc(q)}</li>`).join("");
+      $("sqCard").style.display = "block";
+      log("Planner", `拆出 ${d.sub_questions.length} 个子问题`);
+    } else if (d.node === "researcher") {
+      researcherDone++; totalHits += d.hits;
+      $("meta-researcher").innerHTML = `完成 <b>${researcherDone}</b> · 证据 <b>${totalHits}</b>`;
+      log("Researcher", `「${esc(d.question.slice(0, 18))}…」命中 ${d.hits} 篇`);
+    } else if (d.node === "critic") {
+      setStage("researcher", "done");
+      const pass = d.passed;
+      setStage("critic", pass ? "done" : "fail");
+      $("meta-critic").innerHTML =
+        `<b>${d.score}</b>/10 <span class="badge ${pass ? "pass" : "reject"}">${pass ? "放行" : "打回"}</span>`;
+      log("Critic", `评分 ${d.score}/10 → ${pass ? "放行" : "打回重检索"}${d.comment ? "（" + esc(d.comment) + "）" : ""}`);
+      if (pass) setStage("writer", "active");
+      else { setStage("planner", "active"); setStage("critic"); }
+    } else if (d.node === "writer") {
+      setStage("writer", "done"); setStage("editor", "active");
+      $("meta-writer").innerHTML = `初稿 <b>${d.draft_len}</b> 字`;
+      log("Writer", `初稿完成，${d.draft_len} 字`);
+    } else if (d.node === "editor") {
+      setStage("editor", "done");
+      $("meta-editor").innerHTML = `终稿 <b>${d.report_len}</b> 字`;
+      log("Editor", `终稿完成，${d.report_len} 字`);
+    }
+  } else if (d.type === "done") {
+    stopTimer();
+    setStatus(`完成 · 用时 ${fmtTime(d.elapsed)}`, "done");
+    $("startBtn").disabled = false;
+    $("placeholder").style.display = "none";
+    $("report").innerHTML = marked.parse(d.report || "（空报告）");
+    renderMathInElement($("report"), {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true }
+      ],
+      throwOnError: false
+    });
+    log("System", `报告已保存 · trace: ${d.trace_file}`);
+    es.close();
+  } else if (d.type === "error") {
+    stopTimer();
+    setStatus("出错", "error");
+    $("startBtn").disabled = false;
+    log("Error", esc(d.message));
+    es.close();
+  }
+}
+
+$("startBtn").onclick = () => {
+  const topic = $("topic").value.trim();
+  if (!topic) return;
+  reset();
+  $("startBtn").disabled = true;
+  setStatus("运行中", "running");
+  setStage("planner", "active");
+  startTimer();
+  log("System", `开始研究：${esc(topic)}`);
+  es = new EventSource("/api/research?topic=" + encodeURIComponent(topic));
+  es.onmessage = e => handleEvent(JSON.parse(e.data));
+  es.onerror = () => {
+    if ($("startBtn").disabled) {
+      stopTimer(); setStatus("连接中断", "error");
+      $("startBtn").disabled = false; es.close();
+    }
+  };
+};
+$("topic").addEventListener("keydown", e => { if (e.key === "Enter") $("startBtn").click(); });
+</script>
+</body>
+</html>
