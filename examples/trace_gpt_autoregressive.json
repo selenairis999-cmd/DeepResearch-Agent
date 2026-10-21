@@ -1,0 +1,58 @@
+[
+  {
+    "node": "planner",
+    "sub_questions": [
+      "GPT自回归语言建模的条件概率分解公式 P(x_t|x_<t) 和训练损失函数具体是什么？",
+      "GPT Transformer decoder中的masked self-attention因果掩码如何实现只依赖前文token的自回归预测？",
+      "GPT推理阶段逐token生成的采样策略 temperature、top-k、top-p 如何作用于自回归解码？",
+      "KV cache在GPT自回归解码中如何缓存历史token的key和value以减少重复计算？",
+      "GPT自回归解码的曝光偏差和错误累积问题有哪些具体表现，非自回归或半自回归模型如何替代？"
+    ]
+  },
+  {
+    "node": "researcher",
+    "question": "KV cache在GPT自回归解码中如何缓存历史token的key和value以减少重复计算？",
+    "hits": 3
+  },
+  {
+    "node": "researcher",
+    "question": "GPT自回归语言建模的条件概率分解公式 P(x_t|x_<t) 和训练损失函数具体是什么？",
+    "hits": 3
+  },
+  {
+    "node": "researcher",
+    "question": "GPT Transformer decoder中的masked self-attention因果掩码如何实现只依赖前文token的自回归预测？",
+    "hits": 3
+  },
+  {
+    "node": "researcher",
+    "question": "GPT推理阶段逐token生成的采样策略 temperature、top-k、top-p 如何作用于自回归解码？",
+    "hits": 3
+  },
+  {
+    "node": "researcher",
+    "question": "GPT自回归解码的曝光偏差和错误累积问题有哪些具体表现，非自回归或半自回归模型如何替代？",
+    "hits": 3
+  },
+  {
+    "node": "critic",
+    "loop": 1,
+    "score": 7,
+    "passed": true,
+    "forced": false,
+    "rollback": false,
+    "best_score": 7,
+    "evidence_total": 15,
+    "evidence_kept": 15,
+    "raw": "{\"score\": 7, \"passed\": true, \"gaps\": [\"关于曝光偏差的具体机制及非自回归/半自回归替代方案的证据不足，现有证据多未直接涉及或仅泛泛提及H-JEPA\"], \"comment\": \"前四个子问题证据较充分且互相印证，但第五个子问题覆盖明显薄弱，需补充非自回归/半自回归替代模型的系统资料。\"}",
+    "error": null
+  },
+  {
+    "node": "writer",
+    "draft_len": 3086
+  },
+  {
+    "node": "editor",
+    "report_len": 5164
+  }
+]

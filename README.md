@@ -60,5 +60,6 @@ python web.py          # Web 演示界面 http://127.0.0.1:8000
 ├── tools/            # llm（重试+后端路由）/ search（Tavily）/ scrape（Jina）
 ├── web.py            # FastAPI + SSE 实时推送 Agent 状态
 ├── static/           # 单页演示前端（KaTeX 公式渲染）
-└── traces/           # 运行产物：报告 MD + 全链路 trace JSON
+├── traces/           # 运行产物：报告 MD + 全链路 trace JSON
+└── examples/         # 示例：一次真实运行的报告与 trace（GPT 自回归机制，Critic 一轮 7/10 放行）
 ```
