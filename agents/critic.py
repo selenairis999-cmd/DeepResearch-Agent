@@ -80,15 +80,26 @@ def critic(state: ResearchState) -> dict:
 
     forced = False
     rollback = False
-    if loop_count >= config.MAX_LOOPS and not result["passed"]:
-        result["passed"] = True
-        forced = True
-        best_score = state.get("best_score", -1)
-        if best_score > result["score"]:
-            rollback = True  # final_evidence 中已是最高分轮快照，Writer/Editor 优先使用它
-            result["comment"] = f"达到最大循环次数，回滚至第 {state.get('best_loop')} 轮（历史最高 {best_score} 分）"
+    if not result["passed"] and loop_count >= config.MAX_LOOPS:
+        # 顶到打回上限：转人工确认（human_gate 节点 interrupt 问人，防重入已拆独立节点）；
+        # 硬顶 MAX_LOOPS+1：人工确认后打回的一轮仍不达标 → 无条件放行，防死循环
+        if loop_count >= config.MAX_LOOPS + 1 or not config.HUMAN_IN_LOOP:
+            result["passed"] = True
+            forced = True
+            best_score = state.get("best_score", -1)
+            if best_score > result["score"]:
+                rollback = True  # final_evidence 中已是最高分轮快照，Writer/Editor 优先使用它
+                result["comment"] = f"达到硬性上限（{config.MAX_LOOPS + 1} 轮），回滚至第 {state.get('best_loop')} 轮（历史最高 {best_score} 分）"
+            else:
+                result["comment"] = f"达到硬性上限（{config.MAX_LOOPS + 1} 轮），强制放行"
+            result["forced"] = True
+            result["rollback"] = rollback
         else:
-            result["comment"] = "达到最大循环次数，强制放行"
+            result["needs_human"] = True
+            result["comment"] = (
+                f"达到最大循环 {config.MAX_LOOPS} 轮仍 {result['score']} 分"
+                f"（及格线 {config.CRITIC_PASS_SCORE}），转人工确认"
+            )
 
     return {
         "critique": result,
@@ -97,6 +108,7 @@ def critic(state: ResearchState) -> dict:
         "trace": [{
             "node": "critic", "loop": loop_count, "score": result["score"],
             "passed": result["passed"], "forced": forced, "rollback": rollback,
+            "needs_human": result.get("needs_human", False),
             "best_score": update.get("best_score", state.get("best_score")),
             "evidence_total": total_cnt, "evidence_kept": kept_cnt,
             "raw": raw, "error": str(last_err) if last_err and loop_count < 3 else None,

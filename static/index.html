@@ -49,7 +49,28 @@
   #statusPill.running { color: var(--accent); border-color: var(--accent); }
   #statusPill.done { color: var(--ok); border-color: var(--ok); }
   #statusPill.error { color: var(--err); border-color: var(--err); }
+  #statusPill.waiting { color: var(--warn); border-color: var(--warn); }
   #timer { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  /* 人工确认弹窗（human_gate interrupt 挂起时出现） */
+  #humanModal {
+    position: fixed; inset: 0; background: rgba(5, 8, 14, .72);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  #humanModal .box {
+    background: var(--panel); border: 1px solid var(--warn); border-radius: 12px;
+    padding: 22px 24px; width: 480px; max-width: 90vw;
+  }
+  #humanModal h3 { font-size: 15px; margin-bottom: 10px; color: var(--warn); }
+  #humanModal p { font-size: 13.5px; line-height: 1.8; color: var(--text); margin-bottom: 8px; }
+  #humanModal .hint { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  #humanModal .btns { display: flex; gap: 10px; }
+  #humanModal button {
+    flex: 1; padding: 10px 0; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--panel2); color: var(--text);
+  }
+  #humanModal button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #humanModal button.warn { background: rgba(240, 163, 60, .15); border-color: var(--warn); color: var(--warn); }
   main {
     flex: 1; display: grid; grid-template-columns: 400px 1fr;
     gap: 16px; padding: 16px 28px; min-height: 0;
@@ -167,7 +188,6 @@
         <div class="meta" id="meta-editor"></div>
       </div>
     </div>
-
     <div class="card" id="sqCard" style="display:none">
       <h2>子问题</h2>
       <ol id="subQuestions"></ol>
@@ -186,10 +206,22 @@
   </div>
 </main>
 
+<div id="humanModal">
+  <div class="box">
+    <h3>人工确认 · 是否放行出稿</h3>
+    <p id="humanQ"></p>
+    <div class="hint">force_write＝用历史最高分轮证据直接出稿；retry_once＝再打回一轮（下轮仍不达标将自动放行）</div>
+    <div class="btns">
+      <button id="btnForce" class="primary">用最佳快照出稿</button>
+      <button id="btnRetry" class="warn">再打回一轮</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const stages = ["planner", "researcher", "critic", "writer", "editor"];
-let es = null, t0 = 0, timerInt = null, researcherDone = 0, totalHits = 0;
+let es = null, t0 = 0, timerInt = null, researcherDone = 0, totalHits = 0, threadId = null;
 
 function fmtTime(s) {
   return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
@@ -226,11 +258,15 @@ function reset() {
   $("log").innerHTML = ""; $("report").innerHTML = "";
   $("placeholder").style.display = "block";
   $("sqCard").style.display = "none"; $("subQuestions").innerHTML = "";
-  researcherDone = 0; totalHits = 0;
+  $("humanModal").style.display = "none";
+  researcherDone = 0; totalHits = 0; threadId = null;
 }
 
 function handleEvent(d) {
-  if (d.type === "node") {
+  if (d.type === "start") {
+    threadId = d.thread_id;
+    log("System", `任务 ${threadId} 开始（检查点自动落盘，可断点续跑）`);
+  } else if (d.type === "node") {
     if (d.node === "planner") {
       setStage("planner", "done"); setStage("researcher", "active");
       $("meta-planner").innerHTML = `<b>${d.sub_questions.length}</b> 个子问题`;
@@ -260,8 +296,20 @@ function handleEvent(d) {
       $("meta-editor").innerHTML = `终稿 <b>${d.report_len}</b> 字`;
       log("Editor", `终稿完成，${d.report_len} 字`);
     }
+  } else if (d.type === "interrupt") {
+    // human_gate 节点挂起：进度已存检查点，本流结束；弹窗选分支后开新流续跑
+    threadId = d.thread_id;
+    stopTimer();
+    setStatus("等待人工确认", "waiting");
+    setStage("critic", "fail");
+    $("humanQ").textContent = d.question || "";
+    $("humanModal").style.display = "flex";
+    log("HumanGate", "interrupt 挂起，等待人工确认（进度已存检查点）");
+  } else if (d.type === "waiting") {
+    if (es) es.close();
   } else if (d.type === "done") {
     stopTimer();
+    $("humanModal").style.display = "none";
     setStatus(`完成 · 用时 ${fmtTime(d.elapsed)}`, "done");
     $("startBtn").disabled = false;
     $("placeholder").style.display = "none";
@@ -279,12 +327,34 @@ function handleEvent(d) {
     es.close();
   } else if (d.type === "error") {
     stopTimer();
+    $("humanModal").style.display = "none";
     setStatus("出错", "error");
     $("startBtn").disabled = false;
     log("Error", esc(d.message));
     es.close();
   }
 }
+
+function resumeResearch(verdict) {
+  $("humanModal").style.display = "none";
+  $("startBtn").disabled = true;
+  setStatus("运行中", "running");
+  setStage("critic");
+  if (verdict === "retry_once") setStage("planner", "active");
+  else setStage("writer", "active");
+  startTimer();
+  log("HumanGate", `人工选择：${verdict}，从检查点续跑`);
+  es = new EventSource("/api/research/resume?thread_id=" + encodeURIComponent(threadId) + "&verdict=" + verdict);
+  es.onmessage = e => handleEvent(JSON.parse(e.data));
+  es.onerror = () => {
+    if ($("startBtn").disabled) {
+      stopTimer(); setStatus("连接中断", "error");
+      $("startBtn").disabled = false; es.close();
+    }
+  };
+}
+$("btnForce").onclick = () => resumeResearch("force_write");
+$("btnRetry").onclick = () => resumeResearch("retry_once");
 
 $("startBtn").onclick = () => {
   const topic = $("topic").value.trim();

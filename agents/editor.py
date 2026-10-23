@@ -2,7 +2,7 @@
 import re
 
 import config
-from state import ResearchState
+from state import ResearchState, unique_evidence
 from tools.llm import chat
 
 PROMPT = """你是报告编辑。按以下清单审校初稿并直接输出终稿（Markdown）：
@@ -24,8 +24,9 @@ def _strip_fence(text: str) -> str:
 
 
 def editor(state: ResearchState) -> dict:
-    # 与 Writer 一致：优先最佳检查点快照
-    evidence = state.get("final_evidence") or state.get("evidence", [])
+    # 与 Writer 一致：优先最佳检查点快照；同一个 unique_evidence 列表保证引用编号与参考来源对得上
+    raw = state.get("final_evidence") or state.get("evidence", [])
+    evidence = unique_evidence(raw)
     # 无证据时 Writer 已生成说明稿，直接作为终稿，不再过 LLM
     if not evidence:
         return {"report": state["draft"], "trace": [{"node": "editor", "skipped": "no_evidence"}]}
@@ -44,4 +45,7 @@ def editor(state: ResearchState) -> dict:
         for i, e in enumerate(evidence)
     )
     report = report.rstrip() + refs
-    return {"report": report, "trace": [{"node": "editor", "report_len": len(report)}]}
+    return {"report": report, "trace": [{
+        "node": "editor", "report_len": len(report),
+        "evidence_used": len(evidence), "dupes_removed": len(raw) - len(evidence),
+    }]}

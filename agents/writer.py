@@ -1,6 +1,6 @@
 """Writer：综合证据写结构化初稿，强制引用标注"""
 import config
-from state import ResearchState
+from state import ResearchState, unique_evidence
 from tools.llm import chat
 
 PROMPT = """你是研究报告撰稿人。根据证据卡片撰写关于「{topic}」的研究报告初稿（Markdown）。
@@ -12,8 +12,9 @@ PROMPT = """你是研究报告撰稿人。根据证据卡片撰写关于「{topi
 
 
 def writer(state: ResearchState) -> dict:
-    # 优先用最佳检查点快照（Critic 回滚时为历史最高分轮证据）
-    evidence = state.get("final_evidence") or state.get("evidence", [])
+    # 优先用最佳检查点快照（Critic 回滚时为历史最高分轮证据），并按 URL 去重
+    raw = state.get("final_evidence") or state.get("evidence", [])
+    evidence = unique_evidence(raw)
     # 硬校验：无证据时不走 LLM，直接生成说明（8B 模型在空证据下会编造内容）
     if not evidence:
         notice = (
@@ -30,4 +31,7 @@ def writer(state: ResearchState) -> dict:
         {"role": "system", "content": PROMPT.format(topic=state["topic"])},
         {"role": "user", "content": f"证据列表：\n{evidence_text}"},
     ], temperature=0.5, model=config.MODEL_WRITER)
-    return {"draft": draft, "trace": [{"node": "writer", "draft_len": len(draft)}]}
+    return {"draft": draft, "trace": [{
+        "node": "writer", "draft_len": len(draft),
+        "evidence_used": len(evidence), "dupes_removed": len(raw) - len(evidence),
+    }]}

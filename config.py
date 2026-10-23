@@ -26,3 +26,8 @@ CRITIC_PASS_SCORE = int(os.getenv("CRITIC_PASS_SCORE", "6"))  # 证据质量及�
 MAX_SUB_QUESTIONS = 5                                    # Planner 拆题上限
 SEARCH_RESULTS_PER_QUERY = 3                             # 每个子问题的搜索结果数（演示速度优先）
 SCRAPE_MAX_CHARS = 3000                                  # 每篇网页正文截断长度
+
+# ---- 状态持久化 / 人在回路（langgraph checkpointer）----
+CHECKPOINT_DB = os.getenv("CHECKPOINT_DB", "checkpoints.sqlite")  # 相对路径=项目根；SqliteSaver 每任务一个 thread_id
+HUMAN_IN_LOOP = os.getenv("HUMAN_IN_LOOP", "1").lower() not in ("0", "false", "no")  # MAX_LOOPS 轮仍不达标时转人工确认
+SEARCH_RETRIES = int(os.getenv("SEARCH_RETRIES", "3"))   # Tavily 网络重试次数；最终失败返空列表不再炸整跑

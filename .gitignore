@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 traces/
+checkpoints.sqlite
+runs.json
+.pytest_cache/
