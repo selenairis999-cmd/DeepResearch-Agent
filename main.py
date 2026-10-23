@@ -11,9 +11,7 @@
 进程崩溃 / Ctrl+C 后 --resume 可接着跑，--fork 可回到过去任何一步改写走向。
 """
 import argparse
-import json
 import time
-from pathlib import Path
 
 from langgraph.types import Command
 
@@ -50,11 +48,7 @@ def _repl(graph, payload, cfg) -> dict:
 def _save_and_print(final: dict, thread_id: str, t0: float) -> None:
     report = final.get("report", "")
     print("\n" + "=" * 60 + "\n最终报告\n" + "=" * 60 + f"\n{report}")
-    trace_dir = Path("traces")
-    trace_dir.mkdir(exist_ok=True)
-    (trace_dir / f"report_{int(t0)}.md").write_text(report, encoding="utf-8")
-    trace_file = trace_dir / f"trace_{int(t0)}.json"
-    trace_file.write_text(json.dumps(final.get("trace", []), ensure_ascii=False, indent=2), encoding="utf-8")
+    trace_file = persistence.save_artifacts(int(t0), report, final.get("trace", []))
     print(f"\n耗时 {time.time() - t0:.0f}s · thread_id={thread_id}\ntrace 已保存到 {trace_file}")
 
 

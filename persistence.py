@@ -44,6 +44,18 @@ def record_run(thread_id: str, topic: str) -> None:
     RUNS_INDEX.write_text(json.dumps(runs, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def save_artifacts(trace_id: int, report: str, trace: list) -> Path:
+    """成稿落盘：报告 MD + 全链路 trace JSON（CLI 与 Web 共用同一份实现）"""
+    trace_dir = BASE_DIR / "traces"
+    trace_dir.mkdir(exist_ok=True)
+    (trace_dir / f"report_{trace_id}.md").write_text(report, encoding="utf-8")
+    trace_file = trace_dir / f"trace_{trace_id}.json"
+    trace_file.write_text(
+        json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return trace_file
+
+
 def list_runs() -> list[dict]:
     """runs.json 索引；再对照检查点库里实际存在的 thread_id 去掉已失效条目"""
     db = db_path()

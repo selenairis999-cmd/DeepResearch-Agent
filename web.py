@@ -76,16 +76,11 @@ def _pump(payload, cfg: dict, q: queue.Queue) -> str:
     values = graph.get_state(cfg).values or {}
     report = values.get("report", "")
     trace = values.get("trace", [])
-    trace_dir = BASE_DIR / "traces"
-    trace_dir.mkdir(exist_ok=True)
     ts = int(t0)
-    (trace_dir / f"report_{ts}.md").write_text(report, encoding="utf-8")
-    (trace_dir / f"trace_{ts}.json").write_text(
-        json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    trace_file = persistence.save_artifacts(ts, report, trace)
     q.put({
         "type": "done", "thread_id": thread_id, "report": report,
-        "elapsed": round(time.time() - t0), "trace_file": f"trace_{ts}.json",
+        "elapsed": round(time.time() - t0), "trace_file": trace_file.name,
     })
     return "done"
 
